@@ -1,1 +1,3 @@
 /target
+# Ignore dataset files
+/data

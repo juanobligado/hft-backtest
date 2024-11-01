@@ -1,7 +1,0 @@
-[package]
-name = "hft-backtest"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-hftbacktest = "0.3.2"
