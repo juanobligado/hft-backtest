@@ -9,6 +9,8 @@ readme = "README.md"
 python = "^3.12"
 pandas = "^2.2.3"
 jupyter = "^1.1.1"
+hftbacktest = "^2.1.0"
+requests = "^2.32.3"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.3"
