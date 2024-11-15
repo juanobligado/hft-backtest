@@ -1,57 +1,38 @@
-from abc import ABC, abstractmethod
+import time
+from abc import ABC
+
+import hftbacktest
 import numpy as np
 from numba import types
 from numba.typed import Dict
 from python.scripts.metrics.market_imbalance import MarketImbalance, AssetInfo
+from python.scripts.helper.helper import nanosecond_timestamp_to_date
 from hftbacktest import (
     BUY,
     SELL,
     GTX,
     LIMIT
 )
+from python.scripts.strategy.risk_manager import RiskManager
 
-class RiskManager(ABC):
-    def __init__(self, asset: AssetInfo, bet_size = 50_000, max_usd_position = 1_000_000):
-        self.asset = asset
-        self.position = None
-        self.orders = None
-        self.bet_size = bet_size
-        self.max_usd_position = max_usd_position
 
-    def update_portfolio(self, hbt):
-        self.position = hbt.position(self.asset.asset_no)
-        self.orders = hbt.orders(self.asset.asset_no)
-
-    def quote_to_base(self, quote_amount, price):
-        # round to the nearest lot size
-        rounded_base = round(( quote_amount / price) / self.asset.lot_size) * self.asset.lot_size
-        # make sure it is at least the lot size
-        return max(rounded_base, self.asset.lot_size)
-
-    def calculate_max_allowed_quantity(self, price):
-        return self.quote_to_base(self.max_usd_position, price)
-
-    # Returns the current position as a percentage of the max allowed position
-    def get_current_position_pct(self, price):
-        if self.position is None:
-            return None
-        return self.position / self.calculate_max_allowed_quantity(price)
-
-    def value_position(self, price):
-        return 0 if self.position is None else self.position * price
 
 
 class MarketImbalanceStrategy(ABC):
-    def __init__(self, asset: AssetInfo, risk_manager: RiskManager, period_in_ns = 10_000_000_000, window_size = 3_600_000_000_000):
+    def __init__(self, asset: AssetInfo, risk_manager: RiskManager, period_in_ns = 10_000_000_000, window_size = 60):
         self.period_in_ns = period_in_ns
         self.asset = asset
         self.risk_manager = risk_manager
-        window = int(window_size / period_in_ns)
-        self.imbalance_metric = MarketImbalance(window_size=window, asset=self.asset)
+        self.imbalance_metric = MarketImbalance(self.asset,0.025, window_size)
 
-    def run(self, hbt, stat):
+    def run(self, hbt, recorder: hftbacktest.Recorder):
+        stat = recorder.recorder
+        lot_size = self.asset.lot_size
+        tick_size = self.asset.tick_size
+        asset_no = self.asset.asset_no
+        start_time = time.time()
+        print(f"[{hbt.current_timestamp}] Starting backtest with period")
         while hbt.elapse(self.period_in_ns) == 0:
-            asset_no = self.asset.asset_no
             hbt.clear_inactive_orders(asset_no)
             self.risk_manager.update_portfolio(hbt)
             # get the current depth
@@ -62,16 +43,16 @@ class MarketImbalanceStrategy(ABC):
             #--------------------------------------------------------
             # Computes bid price and ask price.
             mid_price = (market_data.best_bid + market_data.best_ask) / 2.0
-            lot_size = self.asset.lot_size
-            tick_size = self.asset.tick_size
 
-            # Calculate the max position in terms of quantity
+
+            # 0 - 1 with 0 being 100
             normalized_position = self.risk_manager.get_current_position_pct(mid_price)
 
             # Calculate the max position in terms of quantity
             # adjust the fair price by some skew based on opened position %
 
-            adjusted_fair_price = mid_price + 60*self.imbalance_metric.alpha - 3.5 * normalized_position
+            #adjusted_fair_price = self.imbalance_metric.fair_price - 3.5 * normalized_position
+            adjusted_fair_price = self.imbalance_metric.fair_price
             half_spread = 30
 
             bid_price = min(np.round(adjusted_fair_price - half_spread), market_data.best_bid)
@@ -80,6 +61,9 @@ class MarketImbalanceStrategy(ABC):
             ask_price = max(np.round(adjusted_fair_price + half_spread), market_data.best_ask)
             ask_price = np.ceil(ask_price / tick_size) * tick_size
 
+            if stat.i % 100 == 0:
+                current_time = nanosecond_timestamp_to_date(hbt.current_timestamp)
+                print(f" [{current_time}] mkt_status: {self.imbalance_metric.get_status_description()} mid_price: {mid_price}, fair_price: {self.imbalance_metric.fair_price} bid_order_price: {bid_price}, ask_order_price: {ask_price}")
             #--------------------------------------------------------
             current_position_value = self.risk_manager.value_position(mid_price)
             max_position_value = self.risk_manager.max_usd_position
@@ -126,7 +110,7 @@ class MarketImbalanceStrategy(ABC):
                     hbt.submit_sell_order(asset_no, order_id, order_price, order_qty, GTX, LIMIT, False)
             #
             stat.record(hbt)
-
+        print(f"Backtest took {time.time() - start_time} seconds")
 
 
 

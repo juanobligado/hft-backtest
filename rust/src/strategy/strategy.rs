@@ -1,19 +1,11 @@
-/// Implements a market making strategy as described in The Dao of Capital by Mark Spitznagel.
-/// The strategy is based on the idea of a roundabout, where the market maker takes losses
-/// if prices move against them by one tick, but delays taking profit if prices move in their favor.
-
 use std::{collections::HashMap, fmt::Debug};
-
+use std::time::Instant;
 use hftbacktest::prelude::*;
+use tracing::{info, warn};
 
-pub fn gridtrading<MD, I, R>(
+pub fn obi_strategy<MD, I, R>(
     hbt: &mut I,
     recorder: &mut R,
-    relative_half_spread: f64,
-    relative_grid_interval: f64,
-    grid_num: usize,
-    min_grid_step: f64,
-    skew: f64,
     order_qty: f64,
     max_position: f64,
 ) -> Result<(), i64>
@@ -24,20 +16,30 @@ where
     R: Recorder,
     <R as Recorder>::Error: Debug,
 {
-    let tick_size = hbt.depth(0).tick_size() as f64;
-    // min_grid_step should be in multiples of tick_size.
-    let min_grid_step = (min_grid_step / tick_size).round() * tick_size;
+    let tick_size = hbt.depth(0).tick_size();
     let mut int = 0;
-    // Running interval in nanoseconds
-    while hbt.elapse(100_000_000).unwrap() {
-        int += 1;
-        if int % 10 == 0 {
-            // Records every 1-sec.
-            recorder.record(hbt).unwrap();
+    info!("[{}] starting wait cycle..", hbt.current_timestamp());
+    let mut sw = Instant::now();
+    while let Ok(elapsed) = hbt.elapse(10_000_000_000) {
+        if int == 0 {
+            info!("{} elapsed warming up data...", sw.elapsed().as_secs_f64());
+            sw = Instant::now();
         }
-
+        int += 1;
+        match recorder.record(hbt) {
+            Err(e) => {
+                warn!("Failed to record step {}: {:?}", hbt.current_timestamp(), e);
+            }
+            _ => {}
+        }
+        if !elapsed {
+            break;
+        }
         let depth = hbt.depth(0);
         let position = hbt.position(0);
+
+
+       // Prints every 1-min.
 
         if depth.best_bid_tick() == INVALID_MIN || depth.best_ask_tick() == INVALID_MAX {
             // Market depth is incomplete.
@@ -45,12 +47,32 @@ where
         }
 
         let mid_price = (depth.best_bid() + depth.best_ask()) as f64 / 2.0;
-
         let normalized_position = position / order_qty;
 
+        // Calculate market imbalance
+        let spread = 0.025;
+        // add v_bid and v_ask
+        let from_bid_range = depth.best_bid_tick();
+        let min_bid_ticks = (mid_price*(1.0-spread) / tick_size ).ceil() as i64;
+        let mut v_bid: f64 = 0.0;
+        for bid_tick in min_bid_ticks..=from_bid_range {
+            v_bid += depth.bid_qty_at_tick(bid_tick);
+        }
+        let from_ask_range = depth.best_ask_tick();
+        let max_ask_ticks = (mid_price*(1.0+spread) / tick_size ).floor() as i64;
+        let mut v_ask: f64 = 0.0;
+        for ask_tick in from_ask_range..=max_ask_ticks {
+            v_ask += depth.ask_qty_at_tick(ask_tick);
+        }
+
+        let market_imbalance = (v_bid - v_ask) / (v_bid + v_ask);
+
+        let min_tick = depth.tick_size() as f64;
+        let relative_half_spread = 0.00125;
+        let skew = 0.0;
         let relative_bid_depth = relative_half_spread + skew * normalized_position;
         let relative_ask_depth = relative_half_spread - skew * normalized_position;
-        let alpha = 0.0;
+        let alpha = market_imbalance*spread*mid_price;
         let forecast_mid_price = mid_price + alpha;
 
         let bid_price =
@@ -58,14 +80,9 @@ where
         let ask_price =
             (forecast_mid_price * (1.0 + relative_ask_depth)).max(depth.best_ask() as f64);
 
-        // min_grid_step enforces grid interval changes to be no less than min_grid_step, which
-        // stabilizes the grid_interval and keeps the orders on the grid more stable.
-        let grid_interval = ((forecast_mid_price * relative_grid_interval / min_grid_step).round()
-            * min_grid_step)
-            .max(min_grid_step);
 
-        let mut bid_price = (bid_price / grid_interval).floor() * grid_interval;
-        let mut ask_price = (ask_price / grid_interval).ceil() * grid_interval;
+        let bid_price = (bid_price / min_tick).floor() * min_tick;
+        let ask_price = (ask_price / min_tick).ceil() * min_tick ;
 
         //--------------------------------------------------------
         // Updates quotes
@@ -76,14 +93,8 @@ where
             let orders = hbt.orders(0);
             let mut new_bid_orders = HashMap::new();
             if position < max_position && bid_price.is_finite() {
-                for _ in 0..grid_num {
-                    let bid_price_tick = (bid_price / tick_size).round() as u64;
-
-                    // order price in tick is used as order id.
-                    new_bid_orders.insert(bid_price_tick, bid_price);
-
-                    bid_price -= grid_interval;
-                }
+                let bid_price_tick = (bid_price / tick_size).round() as u64;
+                new_bid_orders.insert(bid_price_tick, bid_price);
             }
             // Cancels if an order is not in the new grid.
             let cancel_order_ids: Vec<u64> = orders
@@ -122,14 +133,8 @@ where
             let orders = hbt.orders(0);
             let mut new_ask_orders = HashMap::new();
             if position > -max_position && ask_price.is_finite() {
-                for _ in 0..grid_num {
-                    let ask_price_tick = (ask_price / tick_size).round() as u64;
-
-                    // order price in tick is used as order id.
-                    new_ask_orders.insert(ask_price_tick, ask_price);
-
-                    ask_price += grid_interval;
-                }
+                let ask_price_tick = (ask_price / tick_size).round() as u64;
+                new_ask_orders.insert(ask_price_tick, ask_price);
             }
             // Cancels if an order is not in the new grid.
             let cancel_order_ids: Vec<u64> = orders
@@ -162,7 +167,23 @@ where
                 )
                     .unwrap();
             }
+            if int % 3600 == 0 {
+                info!(
+                    "[{}] mid_price: {:.2}, bid_price: {:.2}, ask_price: {:.2}, position: {:.2}, v_bid: {:.2}, v_ask: {:.2}, market_imbalance: {:.2}, alpha: {:.2}, forecast_mid_price: {:.2}",
+                    hbt.current_timestamp(),
+                    mid_price,
+                    bid_price,
+                    ask_price,
+                    position,
+                    v_bid,
+                    v_ask,
+                    market_imbalance,
+                    alpha,
+                    forecast_mid_price
+                );
+            }
         }
     }
+    info!("Finished backtest. Elapsed time: {}s", sw.elapsed().as_secs_f64());
     Ok(())
 }

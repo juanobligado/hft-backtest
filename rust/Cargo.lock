@@ -602,16 +602,35 @@ checksum = "d231dfb89cfffdbc30e7fc41579ed6066ad03abda9e567ccafae602b97ec5024"
 name = "hft-backtest"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "bincode",
+ "chrono",
  "clap",
+ "dyn-clone",
+ "futures-util",
  "hftbacktest",
+ "hmac 0.13.0-pre.4",
+ "log",
+ "nom",
+ "rand",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror",
+ "tokio",
+ "tokio-tungstenite 0.24.0",
+ "tracing",
  "tracing-subscriber",
+ "uuid",
+ "zip",
 ]
 
 [[package]]
 name = "hftbacktest"
-version = "0.3.2"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4743e1556a8843e2cfae0389691210e431784c46f1566bf9309d9af14718d9e9"
+checksum = "2a1f0f9a2e9c0cca82af8103008794d48f4ba249ecedecdca0d21dd475cda77f"
 dependencies = [
  "anyhow",
  "bincode",
@@ -628,7 +647,7 @@ dependencies = [
  "sha2",
  "thiserror",
  "tokio",
- "tokio-tungstenite",
+ "tokio-tungstenite 0.23.1",
  "tracing",
  "uuid",
  "zip",
@@ -636,9 +655,9 @@ dependencies = [
 
 [[package]]
 name = "hftbacktest-derive"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a0bcea646cd97432fc2e83ea20c58df89db98b0ac41af86d7bff91c0ec16696"
+checksum = "978c23b263e4c484277771e97b8e8a431a3de609963c1a8216e7a9510390cfd1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1634,7 +1653,23 @@ dependencies = [
  "rustls-pki-types",
  "tokio",
  "tokio-rustls",
- "tungstenite",
+ "tungstenite 0.23.0",
+]
+
+[[package]]
+name = "tokio-tungstenite"
+version = "0.24.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "edc5f74e248dc973e0dbb7b74c7e0d6fcc301c694ff50049504004ef4d0cdcd9"
+dependencies = [
+ "futures-util",
+ "log",
+ "rustls",
+ "rustls-native-certs 0.8.0",
+ "rustls-pki-types",
+ "tokio",
+ "tokio-rustls",
+ "tungstenite 0.24.0",
 ]
 
 [[package]]
@@ -1711,6 +1746,26 @@ name = "tungstenite"
 version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6e2e2ce1e47ed2994fd43b04c8f618008d4cabdd5ee34027cf14f9d918edd9c8"
+dependencies = [
+ "byteorder",
+ "bytes",
+ "data-encoding",
+ "http",
+ "httparse",
+ "log",
+ "rand",
+ "rustls",
+ "rustls-pki-types",
+ "sha1",
+ "thiserror",
+ "utf-8",
+]
+
+[[package]]
+name = "tungstenite"
+version = "0.24.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "18e5b8366ee7a95b16d32197d0b2604b43a0be89dc5fac9f8e96ccafbaedda8a"
 dependencies = [
  "byteorder",
  "bytes",
