@@ -4,7 +4,7 @@ from python.scripts.metrics.market_imbalance import AssetInfo
 
 
 class RiskManager(ABC):
-    def __init__(self, asset: AssetInfo, bet_size = 50_000, max_usd_position = 1_000_000):
+    def __init__(self, asset: AssetInfo, bet_size = 1_000, max_usd_position = 1_000_000):
         self.asset = asset
         self.position = None
         self.orders = None

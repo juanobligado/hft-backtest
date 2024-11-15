@@ -237,11 +237,11 @@ Strategy Performance without simulating latency
 
 \begin_layout Standard
 \begin_inset Float table
-placement document
-alignment document
+placement H
+alignment center
 wide false
 sideways false
-status open
+status collapsed
 
 \begin_layout Plain Layout
 \begin_inset Tabular

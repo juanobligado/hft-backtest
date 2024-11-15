@@ -4,7 +4,6 @@ from hftbacktest import (
     HashMapMarketDepthBacktest,
     Recorder
 )
-from datetime import datetime
 import os
 import sys
 # Set the project root directory
@@ -57,7 +56,7 @@ def run_backtest(mkt_data_initial_snapshot, mkt_data_files, latency_files=None, 
     recorder = Recorder(1, 30_000_000)
     depth = hbt.depth(0)
     asset_info = AssetInfo(0, depth.tick_size, depth.lot_size)
-    risk_manager = RiskManager(asset_info, 1_000_000)
+    risk_manager = RiskManager(asset_info, 1_000,1_000_000)
     interval = 1_000_000_000  # 1s
     strategy = MarketImbalanceStrategy(asset_info, risk_manager, interval, window_size=120)
     print("Running backtest...")

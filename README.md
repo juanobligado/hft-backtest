@@ -1,21 +1,28 @@
 
+# Python Project
 
-# Objective
-Demonstrate your foundational skills in high-frequency trading (HFT), quantitative analysis, and software engineering by implementing a basic market-making strategy using the HftBacktest framework.
+To run the backtest you can go to the `python` directory and run the following command:
 
-## Data Source
-Use the sample tick data provided at https://reach.stratosphere.capital/data/usdm/ for your implementation.
+```bash
+  poetry install
+  poetry shell
+  cd scripts
+  python scripts/run_backtest.py
+```
 
-## Task Description
-Implement a basic high-frequency market-making strategy for a single crypto trading pair. Your implementation should use HftBacktest (https://github.com/nkaz001/hftbacktest) and include
+Alternatively, to go over the analysis process you can open Jupyter Notebook located at `python/exercise.ipynb`
 
-1. Data Processing:
-- Load and preprocess the provided tick data from the given source. - Implement at least one relevant feature for HFT decision-making.
+# Rust Project
 
-2. Strategy Implementation:
-- Develop a simple market-making strategy that adjusts quotes based on order book imbalance.
-- Implement basic risk management (e.g., position limits, order size constraints).
+Backtest is also available in Rust. To run the backtest you can go to the `rust` directory and run the following command:
 
-3. Latency Simulation:
-- Utilize HftBacktest's latency simulation features to model feed and order latencies.
+```bash
+  cargo run --release
+```
 
+Keep in mind that the Rust project will require data preparation steps to be run first. 
+So, you should go through the Jupyter Notebook first and run data preparation steps.
+
+
+# Report
+In the `documentation/challenge_report.pdf` directory you can find the report in PDF format.

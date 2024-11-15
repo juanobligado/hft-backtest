@@ -3,6 +3,7 @@ from abc import ABC
 
 import hftbacktest
 import numpy as np
+from debugpy.common.timestamp import current
 from numba import types
 from numba.typed import Dict
 from python.scripts.metrics.market_imbalance import MarketImbalance, AssetInfo
@@ -51,9 +52,8 @@ class MarketImbalanceStrategy(ABC):
             # Calculate the max position in terms of quantity
             # adjust the fair price by some skew based on opened position %
 
-            #adjusted_fair_price = self.imbalance_metric.fair_price - 3.5 * normalized_position
-            adjusted_fair_price = self.imbalance_metric.fair_price
-            half_spread = 30
+            adjusted_fair_price = self.imbalance_metric.fair_price - 3.5 * normalized_position
+            half_spread = 0.0125*3000
 
             bid_price = min(np.round(adjusted_fair_price - half_spread), market_data.best_bid)
             bid_price = np.floor(bid_price / tick_size) * tick_size
@@ -61,29 +61,27 @@ class MarketImbalanceStrategy(ABC):
             ask_price = max(np.round(adjusted_fair_price + half_spread), market_data.best_ask)
             ask_price = np.ceil(ask_price / tick_size) * tick_size
 
-            if stat.i % 100 == 0:
-                current_time = nanosecond_timestamp_to_date(hbt.current_timestamp)
-                print(f" [{current_time}] mkt_status: {self.imbalance_metric.get_status_description()} mid_price: {mid_price}, fair_price: {self.imbalance_metric.fair_price} bid_order_price: {bid_price}, ask_order_price: {ask_price}")
+
             #--------------------------------------------------------
             current_position_value = self.risk_manager.value_position(mid_price)
             max_position_value = self.risk_manager.max_usd_position
 
             # Creates a new grid for buy orders.
-            new_bid_orders = Dict.empty(types.uint64, types.float64)
+            new_bid_orders = Dict.empty(types.int64, types.float64)
 
 
             if current_position_value < max_position_value and np.isfinite(bid_price):
                 bid_price_tick = round(bid_price / tick_size)
                 # order price in tick is used as order id.
-                new_bid_orders[types.uint64(bid_price_tick)] = bid_price
+                new_bid_orders[types.int64(bid_price_tick)] = bid_price
 
 
             # Creates a new grid for sell orders.
-            new_ask_orders = Dict.empty(types.uint64, types.float64)
+            new_ask_orders = Dict.empty(types.int64, types.float64)
             if current_position_value > -max_position_value and np.isfinite(ask_price):
                 ask_price_tick = round(ask_price / tick_size)
                 # order price in tick is used as order id.
-                new_ask_orders[types.uint64(ask_price_tick)] = ask_price
+                new_ask_orders[types.int64(ask_price_tick)] = ask_price
 
             orders = self.risk_manager.orders
             order_values = orders.values()
@@ -97,7 +95,10 @@ class MarketImbalanceStrategy(ABC):
                     ):
                         hbt.cancel(asset_no, order.order_id, False)
 
-            order_qty = max(round((self.risk_manager.bet_size / mid_price) / lot_size) * lot_size, lot_size)
+            order_qty = max( lot_size*round((self.risk_manager.bet_size / mid_price) / lot_size), lot_size)
+            if stat.i % 100 == 0:
+                current_time = nanosecond_timestamp_to_date(hbt.current_timestamp)
+                print(f" [{current_time}]  mkt_status: {self.imbalance_metric.get_status_description()} order_size:{order_qty}  position: {self.risk_manager.position} normalized_position: {normalized_position}  mid_price: {mid_price}, fair_price: {self.imbalance_metric.fair_price} bid_order_price: {bid_price}, ask_order_price: {ask_price}")
             for order_id, order_price in new_bid_orders.items():
                 # Posts a new buy order if there is no working order at the price on the new grid.
                 if order_id not in orders:

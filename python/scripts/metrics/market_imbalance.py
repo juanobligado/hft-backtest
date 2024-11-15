@@ -50,7 +50,7 @@ class MarketImbalance(Metric):
         self.alpha = 0 if self.std == 0 else np.divide(self.last_value - self.mean, self.std)
 
         # we calculate the fair price as the mid price plus the offset spread times the market imbalance
-        self.fair_price = self.last_mid*( 1.0 + self.target_spread * self.last_value)
+        self.fair_price = self.last_mid*( 1.0 + 10*self.asset.tick_size * self.last_value)
 
     def calculate(self, market_data: ROIVectorMarketDepth):
         best_ask = market_data.best_ask
